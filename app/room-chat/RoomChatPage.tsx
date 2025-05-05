@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import styled from 'styled-components/native';
 import { View, Text, TouchableOpacity, TextInput, FlatList, Platform } from 'react-native';
 import MessageActionsRN from './MessageActionsRN';
-import { Clipboard } from 'react-native';
+// Clipboard compatibility
+let Clipboard;
+try {
+  Clipboard = require('expo-clipboard');
+} catch {
+  Clipboard = require('react-native').Clipboard;
+}
 
 // Root container
 const Container = styled(View)`
   position: relative;
-  width: 375px;
-  height: 2324px;
+  width: 100vw;
+  max-width: 100vw;
+  min-height: 100vh;
   background: #FFFFFF;
   border-width: 8px;
   border-color: #000000;
@@ -18,15 +25,18 @@ const Container = styled(View)`
 // Main chat frame
 const MainFrame = styled(View)`
   position: absolute;
-  width: 335px;
-  height: 2016px;
-  left: 20px;
-  top: 154px;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 100vw;
+  max-width: 100vw;
+  min-height: 100vh;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 0px;
-  gap: 20px;
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+  gap: 0;
 `;
 
 const InfoLabel = styled(View)`
@@ -35,15 +45,15 @@ const InfoLabel = styled(View)`
   align-items: center;
   padding: 12px 6px;
   gap: 10px;
-  width: 136px;
-  height: 20px;
+  min-width: 136px;
+  min-height: 20px;
   background: #F5F5F5;
   border-radius: 4px;
 `;
 
 const InfoLabelText = styled(Text)`
-  width: 124px;
-  height: 8px;
+  min-width: 124px;
+  min-height: 8px;
   font-family: 'Poppins-Regular';
   font-size: 12px;
   line-height: 24px;
@@ -59,15 +69,15 @@ const NoticeFrame = styled(View)`
   align-items: center;
   padding: 12px 4px;
   gap: 4px;
-  width: 284px;
-  height: 20px;
+  min-width: 180px;
+  min-height: 20px;
   background: #F5F5F5;
   border-radius: 4px;
 `;
 
 const NoticeText = styled(Text)`
-  width: 258px;
-  height: 8px;
+  min-width: 120px;
+  min-height: 8px;
   font-family: 'Poppins-Regular';
   font-size: 12px;
   line-height: 24px;
@@ -82,14 +92,14 @@ const ChatBubble = styled(View)<{dark?: boolean}>`
   border-radius: 8px;
   padding: 12px 10px;
   gap: 10px;
-  width: 335px;
-  min-height: 60px;
+  width: 100%;
+  min-height: 48px;
   margin-bottom: 10px;
   align-self: ${({dark}) => dark ? 'flex-end' : 'flex-start'};
 `;
 
 const ChatBubbleText = styled(Text)<{dark?: boolean}>`
-  width: 315px;
+  width: 100%;
   font-family: 'Poppins-Regular';
   font-size: 16px;
   line-height: 24px;
@@ -104,12 +114,12 @@ const ChatMeta = styled(View)`
   align-items: center;
   padding: 0px;
   gap: 5px;
-  width: 335px;
+  width: 100%;
   height: 25px;
 `;
 
 const MetaTime = styled(Text)`
-  width: 136px;
+  min-width: 80px;
   font-family: 'Poppins-Regular';
   font-size: 12px;
   line-height: 24px;
@@ -121,8 +131,8 @@ const MetaTime = styled(Text)`
 const InputRow = styled(View)`
   flex-direction: row;
   align-items: center;
-  width: 335px;
-  height: 48px;
+  width: 100%;
+  min-height: 48px;
   background: rgba(16, 30, 58, 0.04);
   border-radius: 100px;
   padding: 0px 12px;
@@ -157,11 +167,20 @@ const RoomChatPage = () => {
   const [input, setInput] = useState('');
   const [activeMsgId, setActiveMsgId] = useState<number|null>(null);
   const [replyTo, setReplyTo] = useState<string|null>(null);
+  const flatListRef = useRef<FlatList<any>>(null);
 
   const handleSend = () => {
     if (input.trim()) {
-      setMessages([...messages, { type: 'text', text: input, id: Date.now() }]);
+      const newMsg = {
+        type: 'text',
+        text: input,
+        id: Date.now() + Math.floor(Math.random()*10000), // better uniqueness
+        replyTo
+      };
+      setMessages(prev => [...prev, newMsg]);
       setInput('');
+      setReplyTo(null);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 0);
     }
   };
 
@@ -175,7 +194,8 @@ const RoomChatPage = () => {
     setActiveMsgId(null);
   };
   const handleCopy = (msg: any) => {
-    Clipboard.setString(msg.text);
+    if (Clipboard?.setStringAsync) Clipboard.setStringAsync(msg.text);
+    else if (Clipboard?.setString) Clipboard.setString(msg.text);
     alert('Copied!');
     setActiveMsgId(null);
   };
@@ -191,10 +211,12 @@ const RoomChatPage = () => {
         {replyTo && (
           <InfoLabel>
             <InfoLabelText>Replying to: {replyTo}</InfoLabelText>
+            <TouchableOpacity onPress={()=>setReplyTo(null)} style={{marginLeft:8}} accessibilityLabel="Cancel reply"><Text style={{color:'#EE1245',fontWeight:'bold'}}>×</Text></TouchableOpacity>
           </InfoLabel>
         )}
         <FlatList
-          style={{marginTop: 0, width: 335}}
+          ref={flatListRef}
+          style={{marginTop: 0, width: '100%'}}
           data={messages}
           keyExtractor={item => item.id.toString()}
           renderItem={({item}) => (
@@ -218,7 +240,7 @@ const RoomChatPage = () => {
           ListHeaderComponent={
             <>
               <NoticeFrame>
-                <NoticeText>Tuesday June 11, 2025</NoticeText>
+                <NoticeText>{new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</NoticeText>
               </NoticeFrame>
               <NoticeFrame>
                 <NoticeText>Keep clean and respectful chats at any time.</NoticeText>
@@ -250,8 +272,10 @@ const RoomChatPage = () => {
             placeholderTextColor="#B3B3B3"
             autoCapitalize="none"
             autoCorrect={false}
+            onSubmitEditing={handleSend}
+            returnKeyType="send"
           />
-          <SendButton onPress={handleSend} accessibilityRole="button">
+          <SendButton onPress={handleSend} accessibilityRole="button" disabled={!input.trim()} style={!input.trim() ? {opacity:0.4} : {}}>
             <SendButtonText>Send</SendButtonText>
           </SendButton>
         </InputRow>
